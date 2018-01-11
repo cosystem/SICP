@@ -1,0 +1,156 @@
+#lang sicp
+
+(define (square x)
+  (* x x))
+
+(define global-array '())
+
+(define (make-entry k v) (list k v))
+(define (key entry) (car entry))
+(define (value entry) (cadr entry))
+
+(define (put op type item)
+  (define (put-helper k array)
+    (cond ((null? array) (list(make-entry k item)))
+          ((equal? (key (car array)) k) array)
+          (else (cons (car array) (put-helper k (cdr array))))))
+  (set! global-array (put-helper (list op type) global-array)))
+
+(define (get op type)
+  (define (get-helper k array)
+    (cond ((null? array) #f)
+          ((equal? (key (car array)) k) (value (car array)))
+          (else (get-helper k (cdr array)))))
+  (get-helper (list op type) global-array))
+
+(define (attach-tag type-tag contents)
+  (cons type-tag contents))
+(define (type-tag datum)
+  (if (pair? datum)
+      (car datum)
+      (error "Bad tagged datum -- TYPE-TAG" datum)))
+(define (contents datum)
+  (if (pair? datum)
+      (cdr datum)
+      (error "Bad tagged datum -- CONTENTS" datum)))
+
+(define (install-polor-package)
+  ;; internal procedure
+  (define (magnitude z) (car z))
+  (define (angle z) (cdr z))
+  (define (make-from-mag-ang r a) (cons r a))
+  (define (real-part z)
+    (* (magnitude z) (cos (angle z))))
+  (define (imag-part z)
+    (* (magnitude z) (sin (angle z))))
+  (define (make-from-real-imag x y)
+    (cons (sqrt (+ (square x) (square y)))
+          (atan y x)))
+  ;; interface to the rest of the system
+  (define (tag x) (attach-tag 'polor x))
+  (put 'real-part '(polor) real-part)
+  (put 'imag-part '(polor) imag-part)
+  (put 'magnitude '(polor) magnitude)
+  (put 'angle '(polor) angle)
+  (put 'make-from-mag-ang 'polor
+       (lambda (r a) (tag (make-from-mag-ang r a))))
+  (put 'make-from-real-imag 'polor
+       (lambda (x y) (tag (make-from-real-imag x y))))
+  'done)
+
+(define (install-rectangular-package)
+  ;; internal procedures
+  (define (real-part z) (car z))
+  (define (imag-part z) (cdr z))
+  (define (make-from-real-imag x y) (cons x y))
+  (define (magnitude z)
+    (sqrt (+ (square (real-part z))
+             (square (imag-part z)))))
+  (define (angle z)
+    (atan (imag-part z) (real-part z)))
+  (define (make-from-mag-ang r a)
+    (cons (* r (cos a)) (* r (sin a))))
+  ;; interface to the rest of the system
+  (define (tag x) (attach-tag 'rectangular x))
+  (put 'real-part '(rectangular) real-part)
+  (put 'imag-part '(rectangular) imag-part)
+  (put 'magnitude '(rectangular) magnitude)
+  (put 'angle '(rectangular) angle)
+  (put 'make-from-real-imag 'rectangular (lambda (x y) (tag (make-from-real-imag x y))))
+  (put 'make-from-mag-ang 'rectangular (lambda (r a) (tag (make-from-mag-ang r a))))
+  'done)
+
+(define (apply-generic op . args)
+  (let ((type-tags (map type-tag args)))
+    (let ((proc (get op type-tags)))
+      (if proc
+          (apply proc (map contents args))
+          (error
+           "No method for these types -- APPLY-GENERIC"
+           (list op type-tags))))))
+
+(define (real-part z) (apply-generic 'real-part z))
+(define (imag-part z) (apply-generic 'imag-part z))
+(define (magnitude z) (apply-generic 'magnitude z))
+(define (angle z) (apply-generic 'angle z))
+
+(define (make-from-real-imag x y)
+  ((get 'make-from-real-imag 'rectangular) x y))
+
+(define (make-from-mag-ang r a)
+  ((get 'make-from-mag-ang 'polor) r a))
+
+(install-polor-package)
+(define z (make-from-mag-ang 10 30))
+z
+(magnitude z)
+(angle z)
+(real-part z)
+(imag-part z)
+
+(install-rectangular-package)
+(define z1 (make-from-real-imag 10 30))
+z1
+(magnitude z1)
+(angle z1)
+(real-part z1)
+(imag-part z1)
+;--------------------- deriv -------------------;
+(define (deriv exp var)
+  (cond ((number? exp) 0)
+        ((variable? exp)
+         (if (same-variable? exp var) 1 0))
+        ((sum? exp)
+         (make-sum (deriv (addend exp) var)
+                   (deriv (augend exp) var)))
+        ((product? exp)
+         (make-sum
+           (make-product (multiplier exp)
+                         (deriv (multiplicand exp) var))
+           (make-product (deriv (multiplier exp) var)
+                         (multiplicand exp))))
+        (else
+         (error "unknown expression type -- DERIV" exp))))
+
+(define (variable? x) (symbol? x))
+
+(define (same-variable? v1 v2)
+  (and (variable? v1) (variable? v2) (eq? v1 v2)))
+
+(define (make-sum a1 a2) (list '+ a1 a2))
+
+(define (make-product m1 m2) (list '* m1 m2))
+
+(define (sum? x)
+  (and (pair? x) (eq? (car x) '+)))
+
+(define (addend s) (cadr s))
+
+(define (augend s) (caddr s))
+
+(define (product? x)
+  (and (pair? x) (eq? (car x) '*)))
+
+(define (multiplier p) (cadr p))
+
+(define (multiplicand p) (caddr p))

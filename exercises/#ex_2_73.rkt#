@@ -193,6 +193,8 @@ z1
 (define (install-sum-package)
   ;; internal procedure
   (define (deriv exp var)
+    (define (addend exp) (car exp))
+    (define (augend exp) (cadr exp))
     (make-sum (deriv (addend exp) var)
               (deriv (augend exp) var))) 
   ;; interface to the rest of the system

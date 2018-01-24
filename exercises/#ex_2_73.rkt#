@@ -170,14 +170,15 @@ z1
 (define (deriv exp var)
   (cond ((number? exp) 0)
         ((variable? exp) (if (same-variable? exp var) 1 0))
-        (else ((get 'deriv (operator exp)) (operands exp) var))))
+        (else ((get 'deriv_opr (operator exp)) (operands exp) var))))
 
 (define (operator exp) (car exp))
 (define (operands exp) (cdr exp))
 
-;a. because we can not tag each number. same-variable involve 1 additional variable  
+; ----- a. explaination -----
+; because we can not tag each number. same-variable involve 1 additional variable  
 
-;b. 
+; ----- b. deriv -----  
 ;(define (make-sum a1 a2) (list '+ a1 a2))
 ;
 ;(define (make-product m1 m2) (list '* m1 m2))
@@ -192,22 +193,32 @@ z1
 
 (define (install-sum-package)
   ;; internal procedure
-  (define (deriv exp var)
-    (define (addend exp) (car exp))
-    (define (augend exp) (cadr exp))
-    (make-sum (deriv (addend exp) var)
-              (deriv (augend exp) var))) 
+  (define (deriv_opr oprand var)
+    ;; the previous addend/augend is not valid anymore, as deriv will be applied on operands
+    (make-sum (deriv (car oprand) var)
+              (deriv (cadr oprand) var))) 
   ;; interface to the rest of the system
-  (put 'deriv '(+) deriv))
+  (put 'deriv_opr '+ deriv_opr))
 
 (define (install-product-package)
   ;; internal procedure
-  (define (deriv exp var)
+  (define (deriv_opr oprand var)
     (make-sum
-     (make-product (multiplier exp)
-                   (deriv (multiplicand exp) var))
-     (make-product (deriv (multiplier exp) var)
-                   (multiplicand exp))))
+     (make-product (car oprand)
+                   (deriv (cadr oprand) var))
+     (make-product (deriv (car oprand) var)
+                   (cadr oprand))))
   ;; interface to the rest of the system
-  (put 'deriv '(*) deriv))
+  (put 'deriv_opr '* deriv_opr))
   
+(display "\n---- test deriv new ----\n")
+(install-sum-package)
+(install-product-package)
+(display (deriv '(+ x 3) 'x))
+(newline)
+(display (deriv '(* x y) 'x))
+(newline)
+(display (deriv '(* (* x y) (+ x 3)) 'x))
+(display "\n---- test deriv new finish ----")
+
+;; ----- c. deriv: expoentiation -----

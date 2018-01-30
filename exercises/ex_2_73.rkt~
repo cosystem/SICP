@@ -140,9 +140,24 @@ z1
 (define (same-variable? v1 v2)
   (and (variable? v1) (variable? v2) (eq? v1 v2)))
 
-(define (make-sum a1 a2) (list '+ a1 a2))
+; non-simplified version: (define (make-sum a1 a2) (list '+ a1 a2))
+(define (=number? exp num)
+  (and (number? exp) (= exp num)))
 
-(define (make-product m1 m2) (list '* m1 m2))
+(define (make-sum a1 a2)
+  (cond ((=number? a1 0) a2)
+        ((=number? a2 0) a1)
+        ((and (number? a1) (number? a2)) (+ a1 a2))
+        (else (list '+ a1 a2))))
+
+; non-simplified version: (define (make-product m1 m2) (list '* m1 m2))
+; simplified version
+(define (make-product m1 m2)
+  (cond ((or (=number? m1 0) (=number? m2 0)) 0)
+        ((=number? m1 1) m2)
+        ((=number? m2 1) m1)
+        ((and (number? m1) (number? m2)) (* m1 m2))
+        (else (list '* m1 m2))))
 
 (define (sum? x)
   (and (pair? x) (eq? (car x) '+)))
@@ -150,7 +165,6 @@ z1
 (define (addend s) (cadr s))
 
 (define (augend s) (caddr s))
-
 (define (product? x)
   (and (pair? x) (eq? (car x) '*)))
 
@@ -170,42 +184,126 @@ z1
 (define (deriv exp var)
   (cond ((number? exp) 0)
         ((variable? exp) (if (same-variable? exp var) 1 0))
-        (else ((get 'deriv (operator exp)) (operands exp) var))))
+        (else ((get 'deriv_opr (operator exp)) (operands exp) var))))
 
 (define (operator exp) (car exp))
 (define (operands exp) (cdr exp))
 
-;a. because we can not tag each number. same-variable involve 1 additional variable  
+;; a. ----- explain the code -----
+;; because we can not tag each number. same-variable involve 1 additional variable  
 
-;b. 
-;(define (make-sum a1 a2) (list '+ a1 a2))
-;
-;(define (make-product m1 m2) (list '* m1 m2))
-;
-;(define (addend s) (cadr s))
-;
-;(define (augend s) (caddr s))
-;
-;(define (multiplier p) (cadr p))
-;
-;(define (multiplicand p) (caddr p))
-
+;; b. ----- implement data directed deriv package ----- 
 (define (install-sum-package)
   ;; internal procedure
-  (define (deriv exp var)
-    (make-sum (deriv (addend exp) var)
-              (deriv (augend exp) var))) 
+  (define (deriv_opr oprand var)
+    ;; the previous addend/augend is not valid anymore, as deriv will be applied on operands
+    (make-sum (deriv (car oprand) var)
+              (deriv (cadr oprand) var))) 
   ;; interface to the rest of the system
-  (put 'deriv '(+) deriv))
+  (put 'deriv_opr '+ deriv_opr))
 
 (define (install-product-package)
   ;; internal procedure
-  (define (deriv exp var)
+  (define (deriv_opr oprand var)
     (make-sum
-     (make-product (multiplier exp)
-                   (deriv (multiplicand exp) var))
-     (make-product (deriv (multiplier exp) var)
-                   (multiplicand exp))))
+     (make-product (car oprand)
+                   (deriv (cadr oprand) var))
+     (make-product (deriv (car oprand) var)
+                   (cadr oprand))))
   ;; interface to the rest of the system
-  (put 'deriv '(*) deriv))
+  (put 'deriv_opr '* deriv_opr))
   
+(newline)
+(display "\n---- test deriv new ----\n")
+(install-sum-package)
+(install-product-package)
+(display (deriv '(+ x 3) 'x))
+(newline)
+(display (deriv '(* x y) 'x))
+(newline)
+(display (deriv '(* (* x y) (+ x 3)) 'x))
+(display "\n---- test deriv new finish ----")
+
+;; c. ----- add exponentiation -----
+(define (expo b n)
+  (cond ((= n 0) 1)
+        ((even? n) (square (expo b (/ n 2))))
+        (else (* b (expo b (- n 1))))))
+
+(define (make-expo e1 e2)
+  (cond ((=number? e1 0) 0)
+        ((=number? e2 0) 1)
+        ((=number? e2 1) e1)
+        ((and (number? e1) (number? e2)) (expo e1 e2))
+        (else (list '** e1 e2))))
+
+(define (base s) (cadr s))
+
+(define (exponent s) (caddr s))
+
+(define (install-exponentiation-package)
+  (define (base_opr s) (car s))
+  (define (exponent_opr s) (cadr s))
+  (define (deriv_opr oprand var)
+    (make-product
+     (make-product
+      (exponent_opr oprand)
+      (make-expo (base_opr oprand) (make-sum (exponent_opr oprand) '-1)))
+     (deriv (base_opr oprand) var)))
+  (put 'deriv_opr '** deriv_opr))
+
+(newline)
+(display "\n---- test deriv new with exponentiation ----\n")
+(install-exponentiation-package)
+(display (deriv '(+ (** x 3) (* 2 x)) 'x))
+(display "\n---- test deriv new with exponentiation finish ----\n")
+;; ----- d. change the order of op and type in get -----
+;; ((get (operator exp) 'deriv) (operands exp) var)
+;; instead of
+;; ((get 'deriv (operator exp)) (operands exp) var)
+
+;; since the order in get is changed, to get correct answer, order in put needs to be changed before get
+
+;; ---- test with put in original order, get in changed order -----
+
+(define (deriv_getchanged exp var)
+  (cond ((number? exp) 0)
+        ((variable? exp) (if (same-variable? exp var) 1 0))
+        (else ((get (operator exp) 'deriv_opr) (operands exp) var))))
+
+(define (install-sum-package_putnotchange)
+  ;; internal procedure
+  (define (deriv_opr oprand var)
+    ;; the previous addend/augend is not valid anymore, as deriv will be applied on operands
+    (make-sum (deriv_getchanged (car oprand) var)
+              (deriv_getchanged (cadr oprand) var))) 
+  ;; interface to the rest of the system
+  (put 'deriv_opr '+ deriv_opr))
+
+(define (install-product-package_putnotchange)
+  ;; internal procedure
+  (define (deriv_opr oprand var)
+    (make-sum
+     (make-product (car oprand)
+                   (deriv_getchanged (cadr oprand) var))
+     (make-product (deriv_getchanged (car oprand) var)
+                   (cadr oprand))))
+  ;; interface to the rest of the system
+  (put 'deriv_opr '* deriv_opr))
+
+(install-sum-package_putnotchange)
+(install-product-package_putnotchange)
+
+(newline)
+(display "\n---- test deriv_getchanged agains put no change ----\n")
+
+(install-sum-package_putnotchange)
+(install-product-package_putnotchange)
+(install-sum-package)
+(install-product-package)
+(display (deriv '(+ x 3) 'x))
+(newline)
+(display (deriv '(* x y) 'x))
+(newline)
+(display (deriv '(* (* x y) (+ x 3)) 'x))
+(display "\n---- test deriv_getchanged agains put no change finish ----")

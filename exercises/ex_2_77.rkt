@@ -202,7 +202,7 @@
   ;(put 'real-part-1 '(complex) real-part-1)
   ; even do not put real-part-1, generic add/sub/mul/div will work with complex number
   ; because the first time apply-generic applied, the complex tag is stripped out
-  ; add-complex then only see the inner tags of rectangular or polar
+  ; the real-part-1 inside add-complex then only see the inner tags of rectangular or polar
   (put 'angle-1 '(complex) angle-1) 
   'done)
 
@@ -254,4 +254,4 @@
 (display (div v z))
 (newline)
 (display (div v w))
-;(display global-array) 
+;(display global-array)

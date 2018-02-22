@@ -27,17 +27,25 @@
 
 ; ---- define attach tag ----;
 (define (attach-tag type-tag contents)
-  (cons type-tag contents))
+  (cond ((eq? type-tag 'scheme-number) contents)
+        (else (cons type-tag contents))))
 
 (define (type-tag datum)
-  (if (pair? datum)
-      (car datum)
-      (error "Bad tagged datum -- TYPE-TAG" datum)))
+  (cond ((pair? datum) (car datum))
+        ((number? datum) 'scheme-number)
+        (else (error "Bad tagged datum -- TYPE-TAG" datum))))
 
 (define (contents datum)
-  (if (pair? datum)
-      (cdr datum)
-      (error "Bad tagged datum -- CONTENTS" datum)))
+  (cond ((pair? datum) (cdr datum))
+        ((number? datum) datum)
+        ((error "Bad tagged datum -- CONTENTS" datum))))
+
+(define (magnitude-1 z) (apply-generic 'magnitude-1 z))
+(define (real-part-1 z) (apply-generic 'real-part-1 z))
+(define (imag-part-1 z) (apply-generic 'imag-part-1 z))
+(define (angle-1 z) (apply-generic 'angle-1 z))
+(define (equ? z1 z2) (apply-generic 'equ? z1 z2))
+(define (=zero? x) (apply-generic '=zero? x))
 
 ;; ---- scheme-number package 
 (define (install-scheme-number-package)
@@ -52,8 +60,13 @@
   (put 'mul '(scheme-number scheme-number)
        (lambda (x y) (tag (* x y))))
   (put 'make 'scheme-number (lambda (x) (tag x)))
+  ; add equal for scheme-number to look-up table
+  (put 'equ? '(scheme-number scheme-number) =)
+  ; add zero test
+  (put '=zero? '(scheme-number) (lambda (x) (= x 0)))
   'done)
 
+; test scheme number package
 ;(install-scheme-number-package)
 ;(define (make-scheme-number n)
 ;  ((get 'make 'scheme-number) n))
@@ -86,6 +99,10 @@
   (define (div-rat x y)
     (make-rat (* (numer x) (denom y))
               (* (denom x) (numer y))))
+  (define (equ-rational x y)
+    (equ? (numer x) (numer y)) (equ? (denom x) (denom y)))
+  (define (=zero-rational x)
+    (and (=zero? (numer x)) (not (=zero? (denom x)))))
   ;; interface to rest of the system
   (define (tag x) (attach-tag 'rational x))
   (put 'add '(rational rational)
@@ -98,8 +115,55 @@
        (lambda (x y) (tag (div-rat x y))))
   (put 'make 'rational
        (lambda (n d) (tag (make-rat n d))))
+  (put 'equ? '(rational rational) equ-rational)
+  (put '=zero? '(rational) =zero-rational)
   'done
   )
+
+;; ---- complex number package
+
+(define (install-complex-package)
+  ;; imported procedures from rectangular and polar packages)
+  (define (make-from-real-imag x y)
+    ((get 'make-from-real-imag 'rectangular) x y))
+  (define (make-from-mag-ang r a)
+    ((get 'make-from-mag-ang 'polar) r a))
+  ;; internal procedures
+  (define (add-complex z1 z2)
+    (make-from-real-imag (+ (real-part-1 z1) (real-part-1 z2))
+                         (+ (imag-part-1 z1) (imag-part-1 z2))))
+  (define (sub-complex z1 z2)
+    (make-from-real-imag (- (real-part-1 z1) (real-part-1 z2))
+                         (- (imag-part-1 z1) (imag-part-1 z2))))
+  (define (mul-complex z1 z2)
+    (make-from-mag-ang (* (magnitude-1 z1) (magnitude-1 z2))
+                       (+ (angle-1 z1) (angle-1 z2))))
+  (define (div-complex z1 z2)
+    (make-from-mag-ang (/ (magnitude-1 z1) (magnitude-1 z2))
+                       (- (angle-1 z1) (angle-1 z2))))
+  (define (equ-complex z1 z2)
+    (and (equ? (real-part-1 z1) (real-part-1 z2)) (equ? (imag-part-1 z1) (imag-part-1 z2))))
+  (define (=zero-complex z)
+    (and (=zero? (real-part-1 z)) (=zero? (imag-part-1 z))))
+  ;; interface to rest of the system
+  (define (tag z) (attach-tag 'complex z))
+  (put 'add '(complex complex)
+       (lambda (z1 z2) (tag (add-complex z1 z2))))
+  (put 'sub '(complex complex)
+       (lambda (z1 z2) (tag (sub-complex z1 z2))))
+  (put 'mul '(complex complex)
+       (lambda (z1 z2) (tag (mul-complex z1 z2))))
+  (put 'div '(complex complex)
+       (lambda (z1 z2) (tag (div-complex z1 z2))))
+  (put 'make-from-real-imag 'complex
+       (lambda (x y) (tag (make-from-real-imag x y))))
+  (put 'make-from-mag-ang 'complex
+       (lambda (r a) (tag (make-from-mag-ang r a))))
+  (put 'real-part-1 '(complex) real-part-1)
+  (put 'magnitude-1 '(complex) magnitude-1)
+  (put 'equ? '(complex complex) equ-complex)
+  (put '=zero? '(complex) =zero-complex)
+  'done)
 
 ;; ---- rectangular number package
 (define (install-rectangular-package)
@@ -135,7 +199,6 @@
   (define (real-part-1 z)
     (* (magnitude-1 z) (cos (angle-1 z))))
   (define (imag-part-1 z)
-
     (* (magnitude-1 z) (sin (angle-1 z))))
   (define (make-from-real-imag x y) 
     (cons (sqrt (+ (square x) (square y)))
@@ -161,56 +224,6 @@
            "No method for these types -- APPLY-GENERIC"
            (list op type-tags))))))
 
-;; ---- complex number package
-(install-polar-package)
-(install-rectangular-package)
-
-(define (install-complex-package)
-  ;; imported procedures from rectangular and polar packages)
-  (define (make-from-real-imag x y)
-    ((get 'make-from-real-imag 'rectangular) x y))
-  (define (make-from-mag-ang r a)
-    ((get 'make-from-mag-ang 'polar) r a))
-  ;; internal procedures
-  (define (add-complex z1 z2)
-    (make-from-real-imag (+ (real-part-1 z1) (real-part-1 z2))
-                         (+ (imag-part-1 z1) (imag-part-1 z2))))
-  (define (sub-complex z1 z2)
-    (make-from-real-imag (- (real-part-1 z1) (real-part-1 z2))
-                         (- (imag-part-1 z1) (imag-part-1 z2))))
-  (define (mul-complex z1 z2)
-    (make-from-mag-ang (* (magnitude-1 z1) (magnitude-1 z2))
-                       (+ (angle-1 z1) (angle-1 z2))))
-  (define (div-complex z1 z2)
-    (make-from-mag-ang (/ (magnitude-1 z1) (magnitude-1 z2))
-                       (- (angle-1 z1) (angle-1 z2))))
-  ;; interface to rest of the system
-  (define (tag z) (attach-tag 'complex z))
-  (put 'add '(complex complex)
-       (lambda (z1 z2) (tag (add-complex z1 z2))))
-  (put 'sub '(complex complex)
-       (lambda (z1 z2) (tag (sub-complex z1 z2))))
-  (put 'mul '(complex complex)
-       (lambda (z1 z2) (tag (mul-complex z1 z2))))
-  (put 'div '(complex complex)
-       (lambda (z1 z2) (tag (div-complex z1 z2))))
-  (put 'make-from-real-imag 'complex
-       (lambda (x y) (tag (make-from-real-imag x y))))
-  (put 'make-from-mag-ang 'complex
-       (lambda (r a) (tag (make-from-mag-ang r a))))
-  (put 'magnitude-1 '(complex) magnitude-1)
-  ;(put 'real-part-1 '(complex) real-part-1)
-  ; even do not put real-part-1, generic add/sub/mul/div will work with complex number
-  ; because the first time apply-generic applied, the complex tag is stripped out
-  ; add-complex then only see the inner tags of rectangular or polar
-  (put 'angle-1 '(complex) angle-1) 
-  'done)
-
-(define (real-part-1 x) (apply-generic 'real-part-1 x))
-(define (imag-part-1 x) (apply-generic 'imag-part-1 x))
-(define (magnitude-1 z) (apply-generic 'magnitude-1 z))
-(define (angle-1 x) (apply-generic 'angle-1 x))
-
 (define (make-complex-from-real-imag x y)
   ((get 'make-from-real-imag 'complex) x y))
 
@@ -218,40 +231,28 @@
   ((get 'make-from-mag-ang 'complex) r a))
 
 (install-complex-package)
+(install-polar-package)
+(install-rectangular-package)
+(install-scheme-number-package)
 
 (define x ((get 'make-from-real-imag 'rectangular) 3 4))
-(real-part-1 x)
 (define y ((get 'make-from-mag-ang 'polar) 6 2))
-(define z (make-complex-from-real-imag 3 4))
-(define v (make-complex-from-real-imag 2 5))
-(define w (make-complex-from-mag-ang 9 10))
+(define z1 (make-complex-from-real-imag 3 4))
+(define z2 (make-complex-from-real-imag 4 3))
 
-; test magnitude-1
-(magnitude-1 x)
-(newline)
-(magnitude-1 y)
-;(magnitude-1 z) ; without put in complex package, print "No method for these types -- APPLY-GENERIC {magnitude-1 {complex}}
-(display z)
-(newline)
-(magnitude-1 z)
+(real-part-1 z1)
+(magnitude-1 z1)
+(equ? z1 z2)
 
-; test add
-(define (add a b) (apply-generic 'add a b))
-(display z)
+; test with rational number
+(install-rational-package)
+(define (make-rational x y) ((get 'make 'rational) x y))
+(define w1 (make-complex-from-real-imag (make-rational 5 6) (make-rational 7 9)))
+(define w2 (make-complex-from-real-imag (make-rational 5 6) (make-rational 7 9)))
+(define w3 (make-complex-from-real-imag (make-rational 0 6) (make-rational 0 9)))
+(define r1 (make-rational 0 8))
+(equ? w1 w2)
 (newline)
-(display v)
-(newline)
-(display (add v z))
-(newline)
-(display (add v w))
-
-; test div
-(define (div a b) (apply-generic 'div a b))
-(display z)
-(newline)
-(display v)
-(newline)
-(display (div v z))
-(newline)
-(display (div v w))
-;(display global-array) 
+(=zero? 0)
+(=zero? r1)
+(=zero? w3)

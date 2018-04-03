@@ -45,7 +45,7 @@
 (define (imag-part-1 z) (apply-generic 'imag-part-1 z))
 (define (angle-1 z) (apply-generic 'angle-1 z))
 (define (equ? z1 z2) (apply-generic 'equ? z1 z2))
-(define (=zero? x) (apply-generic '=zero? x))
+;(define (=zero? x) (apply-generic '=zero? x))
 
 ;; ---- scheme-number package 
 (define (install-scheme-number-package)
@@ -65,6 +65,7 @@
   ; add zero test
   (put '=zero? '(scheme-number) (lambda (x) (= x 0)))
   'done)
+
 
 ; test scheme number package
 ;(install-scheme-number-package)

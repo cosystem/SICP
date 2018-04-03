@@ -1,0 +1,17 @@
+#lang sicp
+
+(define (=zero? p)
+  (all-zero? (map (lambda (x) (coeff x)) (term-list p))))
+
+(define (term-list p) (cdr p))
+
+(define (coeff term) (cadr term))
+
+(define (all-zero? cs)
+  (cond ((null? cs) #f)
+        ((not (pair? cs)) (=zero? cs))
+        ((not (=zero? (car cs))) #f)
+        (else (all-zero? (cdr cs)))))
+
+; =zero? should be installed in each package for different type of numbers
+; so =zero? in all-zero? is a generic method

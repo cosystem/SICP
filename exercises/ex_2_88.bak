@@ -1,0 +1,110 @@
+#lang scheme
+;(require racket/include)
+(include "../packages/arthmetics.scm")
+
+(define (install-polynomial-package)
+  ;; internal procedures
+  ;; representation of ploy
+  (define (make-poly variable term-list)
+    (cons variable term-list))
+  (define (variable p)(car p))
+  (define (term-list p)(cdr p))
+  (define (variable? x) (symbol? x))
+  (define (same-variable? v1 v2)
+    (and (variable? v1) (variable v2) (eq? v1 v2)))
+
+  (define (=zero_c? terms)
+    (or (empty-termlist? terms)
+        (and (=zero? (coeff (first-term terms))) (=zero_c? (rest-terms terms)))))
+  (define (=zero_p? p)
+    (=zero_c? (term-list p)))
+
+  ;; representation of terms and term lists
+  (define (adjoin-term term term-list)
+    (if (=zero? (coeff term))
+        term-list
+        (cons term term-list)))
+  (define (the-empty-termlist) '())
+  (define (first-term term-list) (car term-list))
+  (define (rest-terms term-list) (cdr term-list))
+  (define (empty-termlist? term-list) (null? term-list))
+
+  (define (make-term order coeff) (list order coeff))
+  (define (order term) (car term))
+  (define (coeff term) (cadr term))
+
+  (define (add-poly p1 p2)
+    (if (same-variable? (variable p1) (variable p2))
+        (make-poly (variable p1) (add-terms (term-list p1)
+                                            (term-list p2)))
+        (error "Ploy not in same var -- ADD-PLOY"
+               (list p1 p2))))
+  ;; ------ exercise 2.88 subtraction of polynomials ------
+  (define (sub-poly p1 p2)
+    (add-poly p1 (negation_p p2)))
+
+  (define (negation_p p)
+    (make-poly (variable p) (nega-term (term-list p))))
+
+  (define (nega-term terms)
+    (map (lambda (term) (make-term (order term) (negation (coeff term)))) terms))
+
+  ;(define (mul-ploy p1 p2)
+  ;  (if (same-variable? (variable p1) (variable p2))
+  ;      (make-poly (variable p1) (mul-terms (term-list p1)
+  ;                                          (term-list p2)))
+  ;      (error "Ploy not in same var -- MUL-PLOY"
+  ;             (list p1 p2))))
+
+  (define (add-terms L1 L2)
+    (cond ((empty-termlist? L1) L2)
+          ((empty-termlist? L2) L1)
+          (else
+           (let ((t1 (first-term L1)) (t2 (first-term L2)))
+             (cond ((> (order t1) (order t2))
+                    (adjoin-term
+                     t1 (add-terms (rest-terms L1) L2)))
+                   ((< (order t1)(order t2))
+                    (adjoin-term
+                     t2 (add-terms L1 (rest-terms L2))))
+                   (else
+                    (adjoin-term
+                     (make-term (order t1)
+                                (add (coeff t1) (coeff t2)))
+                     (add-terms (rest-terms L1)
+                                (rest-terms L2)))))))))
+  ;;interface to rest of the system
+  (define (tag p) (attach-tag 'polynomial p))
+  (put 'add '(polynomial polynomial)
+       (lambda (p1 p2) (tag (add-poly p1 p2))))
+  ;(put 'mul '(polynomial polynomial)
+  ;     (lambda (p1 p2) (tag (mul-poly p1 p2))))
+  (put 'make 'polynomial
+       (lambda (var terms) (tag (make-poly var terms))))
+  (put '=zero? '(polynomial)
+       (lambda (p) (=zero_p? p)))
+  (put 'term-list '(polynomial)
+       (lambda (p) (term-list p)))
+  (put 'negation '(polynomial)
+       (lambda (p) (tag (negation_p p))))
+  (put 'sub '(polynomial polynomial)
+       (lambda (p1 p2) (tag (sub-poly p1 p2))))
+  "polynomial package installed")
+(define (=zero? x) (apply-generic '=zero? x))
+(install-polynomial-package)
+(define (make-polynomial v t) ((get 'make 'polynomial) v t))
+(define (negation x) (apply-generic 'negation x))
+(define (sub p1 p2) (apply-generic 'sub p1 p2))
+
+(install-polynomial-package)
+(define r0 (make-rational 3 -7))
+(define c0 (make-complex-from-real-imag 6 7))
+(define p0 (make-polynomial 'x (list (list 3 14) (list 2 5) (list 1 2))))
+(define p1 (make-polynomial 'x (list (list 4 c0) (list 2 1) (list 1 6))))
+               
+
+  
+
+
+; =zero? should be installed in each package for different type of numbers
+; so =zero? in all-zero? is a generic method
